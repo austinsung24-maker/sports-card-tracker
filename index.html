@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Sports Card Profit Tracker</title>
+  <meta name="description" content="Track buying and selling of sports cards and calculate profits easily.">
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -34,7 +35,7 @@
     .profit-negative {
       color: red;
     }
-    #totalProfit {
+    #totals {
       margin-top: 20px;
       font-size: 1.2em;
       font-weight: bold;
@@ -59,6 +60,7 @@
         <th>Buy Price</th>
         <th>Sell Price</th>
         <th>Profit</th>
+        <th>Action</th>
       </tr>
     </thead>
     <tbody>
@@ -66,10 +68,42 @@
     </tbody>
   </table>
 
-  <div id="totalProfit">Total Profit: $0.00</div>
+  <div id="totals">
+    Total Spent: $0.00 | Total Earned: $0.00 | Total Profit: $0.00
+  </div>
 
   <script>
-    let totalProfitValue = 0;
+    let cards = JSON.parse(localStorage.getItem('cards')) || [];
+
+    function saveCards() {
+      localStorage.setItem('cards', JSON.stringify(cards));
+    }
+
+    function updateTable() {
+      const table = document.getElementById('cardTable').getElementsByTagName('tbody')[0];
+      table.innerHTML = '';
+      let totalSpent = 0, totalEarned = 0, totalProfit = 0;
+
+      cards.forEach((card, index) => {
+        const profit = card.sell - card.buy;
+        totalSpent += card.buy;
+        totalEarned += card.sell;
+        totalProfit += profit;
+
+        const row = table.insertRow();
+        row.innerHTML = `
+          <td>${card.name}</td>
+          <td>$${card.buy.toFixed(2)}</td>
+          <td>$${card.sell.toFixed(2)}</td>
+          <td class="${profit >= 0 ? 'profit-positive' : 'profit-negative'}">$${profit.toFixed(2)}</td>
+          <td><button onclick="deleteCard(${index})">Delete</button></td>
+        `;
+      });
+
+      const totalsDiv = document.getElementById('totals');
+      totalsDiv.innerHTML = `Total Spent: $${totalSpent.toFixed(2)} | Total Earned: $${totalEarned.toFixed(2)} | Total Profit: $${totalProfit.toFixed(2)}`;
+      totalsDiv.style.color = totalProfit >= 0 ? 'green' : 'red';
+    }
 
     function addCard() {
       const name = document.getElementById('cardName').value;
@@ -81,28 +115,23 @@
         return;
       }
 
-      const profit = sell - buy;
-      totalProfitValue += profit;
+      cards.push({ name, buy, sell });
+      saveCards();
+      updateTable();
 
-      const table = document.getElementById('cardTable').getElementsByTagName('tbody')[0];
-      const newRow = table.insertRow();
-      newRow.innerHTML = `
-        <td>${name}</td>
-        <td>$${buy.toFixed(2)}</td>
-        <td>$${sell.toFixed(2)}</td>
-        <td class="${profit >= 0 ? 'profit-positive' : 'profit-negative'}">$${profit.toFixed(2)}</td>
-      `;
-
-      // Update total profit
-      const totalProfitDiv = document.getElementById('totalProfit');
-      totalProfitDiv.innerHTML = `Total Profit: $${totalProfitValue.toFixed(2)}`;
-      totalProfitDiv.style.color = totalProfitValue >= 0 ? 'green' : 'red';
-
-      // Clear input fields
       document.getElementById('cardName').value = '';
       document.getElementById('buyPrice').value = '';
       document.getElementById('sellPrice').value = '';
     }
+
+    function deleteCard(index) {
+      cards.splice(index, 1);
+      saveCards();
+      updateTable();
+    }
+
+    // Initialize table on page load
+    updateTable();
   </script>
 </body>
 </html>
