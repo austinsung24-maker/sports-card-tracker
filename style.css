@@ -1,62 +1,253 @@
-body {
-  font-family: Arial, sans-serif;
-  background: #f4f4f9;
-  color: #333;
-  margin: 0;
-  padding: 0;
+class CardTracker {
+    constructor() {
+        this.cards = JSON.parse(localStorage.getItem('sportsCards')) || [];
+        this.currentPeriod = 'all';
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.generatePeriodButtons();
+        this.renderCards();
+        this.updateStats();
+        this.renderCharts();
+    }
+
+    setupEventListeners() {
+        document.getElementById('cardForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.addCard();
+        });
+    }
+
+    addCard() {
+        const cardName = document.getElementById('cardName').value;
+        const purchasePrice = parseFloat(document.getElementById('purchasePrice').value);
+        const salePrice = parseFloat(document.getElementById('salePrice').value);
+        const period = document.getElementById('period').value;
+        const saleDate = document.getElementById('saleDate').value;
+
+        const card = {
+            id: Date.now(),
+            name: cardName,
+            purchasePrice: purchasePrice,
+            salePrice: salePrice,
+            period: period,
+            saleDate: saleDate,
+            profit: salePrice - purchasePrice,
+            roi: ((salePrice - purchasePrice) / purchasePrice) * 100
+        };
+
+        this.cards.push(card);
+        this.saveToLocalStorage();
+        this.renderCards();
+        this.updateStats();
+        this.renderCharts();
+        this.resetForm();
+    }
+
+    deleteCard(id) {
+        this.cards = this.cards.filter(card => card.id !== id);
+        this.saveToLocalStorage();
+        this.renderCards();
+        this.updateStats();
+        this.renderCharts();
+    }
+
+    saveToLocalStorage() {
+        localStorage.setItem('sportsCards', JSON.stringify(this.cards));
+    }
+
+    resetForm() {
+        document.getElementById('cardForm').reset();
+    }
+
+    generatePeriodButtons() {
+        const periods = [
+            { id: 'all', name: 'All Periods' },
+            { id: 'week1', name: 'Week 1' },
+            { id: 'week2', name: 'Week 2' },
+            { id: 'week3', name: 'Week 3' },
+            { id: 'week4', name: 'Week 4' },
+            { id: 'month1', name: 'Month 1' },
+            { id: 'month2', name: 'Month 2' },
+            { id: 'month3', name: 'Month 3' }
+        ];
+
+        const container = document.getElementById('periodButtons');
+        container.innerHTML = '';
+
+        periods.forEach(period => {
+            const button = document.createElement('button');
+            button.className = `period-btn ${period.id === this.currentPeriod ? 'active' : ''}`;
+            button.textContent = period.name;
+            button.onclick = () => this.filterByPeriod(period.id);
+            container.appendChild(button);
+        });
+    }
+
+    filterByPeriod(period) {
+        this.currentPeriod = period;
+        this.generatePeriodButtons();
+        this.renderCards();
+        this.renderCharts();
+    }
+
+    getFilteredCards() {
+        if (this.currentPeriod === 'all') {
+            return this.cards;
+        }
+        return this.cards.filter(card => card.period === this.currentPeriod);
+    }
+
+    renderCards() {
+        const container = document.getElementById('cardsContainer');
+        const filteredCards = this.getFilteredCards();
+
+        if (filteredCards.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No cards found for this period. Add some cards to get started!</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="cards-grid">
+                ${filteredCards.map(card => `
+                    <div class="card-item">
+                        <div class="card-name">${card.name}</div>
+                        <div class="card-price">Buy: $${card.purchasePrice.toFixed(2)}</div>
+                        <div class="card-price">Sell: $${card.salePrice.toFixed(2)}</div>
+                        <div class="card-price ${card.profit >= 0 ? 'profit-positive' : 'profit-negative'}">
+                            Profit: $${card.profit.toFixed(2)} (${card.roi.toFixed(1)}%)
+                        </div>
+                        <div class="period-badge">${this.getPeriodName(card.period)}</div>
+                        <button class="delete-btn" onclick="tracker.deleteCard(${card.id})">Delete</button>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    getPeriodName(periodId) {
+        const periodMap = {
+            'week1': 'Week 1',
+            'week2': 'Week 2',
+            'week3': 'Week 3',
+            'week4': 'Week 4',
+            'month1': 'Month 1',
+            'month2': 'Month 2',
+            'month3': 'Month 3'
+        };
+        return periodMap[periodId] || periodId;
+    }
+
+    updateStats() {
+        const filteredCards = this.getFilteredCards();
+        
+        const totalProfit = filteredCards.reduce((sum, card) => sum + card.profit, 0);
+        const totalCards = filteredCards.length;
+        const avgROI = totalCards > 0 ? filteredCards.reduce((sum, card) => sum + card.roi, 0) / totalCards : 0;
+
+        document.getElementById('totalProfit').textContent = `$${totalProfit.toFixed(2)}`;
+        document.getElementById('totalCards').textContent = totalCards;
+        document.getElementById('avgROI').textContent = `${avgROI.toFixed(1)}%`;
+    }
+
+    renderCharts() {
+        this.renderProfitChart();
+        this.renderROIChart();
+    }
+
+    renderProfitChart() {
+        const ctx = document.getElementById('profitChart').getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (this.profitChart) {
+            this.profitChart.destroy();
+        }
+
+        const periods = ['week1', 'week2', 'week3', 'week4', 'month1', 'month2', 'month3'];
+        const profitByPeriod = periods.map(period => {
+            const periodCards = this.cards.filter(card => card.period === period);
+            return periodCards.reduce((sum, card) => sum + card.profit, 0);
+        });
+
+        this.profitChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Month 1', 'Month 2', 'Month 3'],
+                datasets: [{
+                    label: 'Profit by Period',
+                    data: profitByPeriod,
+                    backgroundColor: profitByPeriod.map(profit => 
+                        profit >= 0 ? 'rgba(40, 167, 69, 0.8)' : 'rgba(220, 53, 69, 0.8)'
+                    ),
+                    borderColor: profitByPeriod.map(profit => 
+                        profit >= 0 ? 'rgba(40, 167, 69, 1)' : 'rgba(220, 53, 69, 1)'
+                    ),
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Profit ($)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderROIChart() {
+        const ctx = document.getElementById('roiChart').getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (this.roiChart) {
+            this.roiChart.destroy();
+        }
+
+        const periods = ['week1', 'week2', 'week3', 'week4', 'month1', 'month2', 'month3'];
+        const roiByPeriod = periods.map(period => {
+            const periodCards = this.cards.filter(card => card.period === period);
+            if (periodCards.length === 0) return 0;
+            const totalROI = periodCards.reduce((sum, card) => sum + card.roi, 0);
+            return totalROI / periodCards.length;
+        });
+
+        this.roiChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Month 1', 'Month 2', 'Month 3'],
+                datasets: [{
+                    label: 'Average ROI by Period (%)',
+                    data: roiByPeriod,
+                    backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                    borderColor: 'rgba(102, 126, 234, 1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'ROI (%)'
+                        }
+                    }
+                }
+            }
+        });
+    }
 }
 
-header {
-  background: #0078D7;
-  color: white;
-  text-align: center;
-  padding: 1em 0;
-}
-
-form {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin: 20px;
-}
-
-input, button {
-  padding: 8px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-}
-
-button {
-  background: #0078D7;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #005ea8;
-}
-
-table {
-  width: 80%;
-  margin: 0 auto;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 10px;
-  border: 1px solid #ddd;
-  text-align: center;
-}
-
-tr:nth-child(even) {
-  background: #f9f9f9;
-}
-
-footer {
-  text-align: center;
-  margin-top: 20px;
-  padding: 10px;
-  background: #0078D7;
-  color: white;
-}
+// Initialize the tracker when the page loads
+const tracker = new CardTracker();
